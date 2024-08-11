@@ -1,5 +1,0 @@
-# requirements.txt
-
-numpy
-scipy
-matplotlib
