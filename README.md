@@ -1,0 +1,1 @@
+# Livestock-Risk-Protection-Hedging-Strategy
