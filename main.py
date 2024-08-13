@@ -15,21 +15,22 @@ class LivestockRiskProtection:
         d1 = (np.log(self.F / K) + 0.5 * sigma ** 2 * T) / (sigma * np.sqrt(T))
         d2 = d1 - sigma * np.sqrt(T)
         put_price = K * np.exp(-self.r * T) * norm.cdf(-d2) - self.F * np.exp(-self.r * T) * norm.cdf(-d1)
+
         return put_price
 
     def implied_volatility_with_futures(self, P, K, T):
-        """Compute the implied volatility from the option price using Brent's method with futures price."""
+        """Compute the implied volatility from the option price using Bisect's method with futures price."""
 
         # Define the objective function for finding the root
         def objective_function(sigma):
             return self.black_scholes_put_price_with_futures(K, T, sigma) - P
 
-        lowerbound = np.max([0, (K - self.F) * np.exp(-self.r * T)])
+        lowerbound = np.max([0, (K-self.F) * np.exp(-self.r * T)])
         if P < lowerbound:
             return np.nan
         if P == lowerbound:
             return 0
-        if P >= self.F * np.exp(-self.r * T):
+        if P >= K * np.exp(-self.r * T):
             return np.nan
         hi = 0.2
 
@@ -49,12 +50,6 @@ class LivestockRiskProtection:
         delta_put = -np.exp(-self.r * T) * norm.cdf(-d1)
         return delta_put
 
-    # def compute_put_delta_from_premium_with_futures(self, P, K, T, sigma):
-    #     """Compute the Black-Scholes put delta from the option premium using the futures price."""
-    #     # sigma = self.implied_volatility_with_futures(P, K, T)
-    #     delta_put = self.black_scholes_put_delta_with_futures(K, T, sigma)
-    #     return delta_put
-
     def synthetic_put_delta(self, P0, K0, F0, T, sigma):
         # Strike prices
         K1 = K0 - 1.5 * abs(K0 - F0)  # K1 is 1.5 times further away from F than K0
@@ -70,10 +65,6 @@ class LivestockRiskProtection:
 
         return synthetic_delta
 
-    def put_payoff(self, K):
-        """Compute the payoff of a put option at maturity."""
-        return np.maximum(K - self.F, 0)
-
     def synthetic_option_payoff(self, P, K0, F0, T, sigma):
         """Compute the synthetic option payoff with respect to K0."""
         if (K0 - 5 * abs(K0 - F0)) >= 0:
@@ -82,7 +73,6 @@ class LivestockRiskProtection:
             K2 = K0 - 5 * abs(K0 - F0)  # K2 is 5 times further away from F than K0
 
             # Calculate individual put option payoffs at each strike
-            # sigma = self.implied_volatility_with_futures(P, self.F, T) # Assume IV is constant based on ATM vol
             payoff_K0 = self.black_scholes_put_price_with_futures(K0, T, sigma)
             payoff_K1 = self.black_scholes_put_price_with_futures(K1, T, sigma)
             payoff_K2 = self.black_scholes_put_price_with_futures(K2, T, sigma)
@@ -94,15 +84,16 @@ class LivestockRiskProtection:
 
 def plot_synthetic_option_payoff(r, P, K0, F0, T):
     # Plot the synthetic option payoff
-    price_values = np.linspace(0, 2 * K0, 100)
+    price_values = np.linspace(0, 2 * K0, 1000)
     total_payoffs = []
     price_values_valid = []
 
-    livestock_risk_protection = LivestockRiskProtection(r, K0)  # Calculate ATM vol
-    if T == 0:
+    livestock_risk_protection = LivestockRiskProtection(r, F0)  # Calculate ATM vol
+    if abs(T) < 1e-6:
         sigma = 0
     else:
         sigma = livestock_risk_protection.implied_volatility_with_futures(P, K0, T)
+
     for price in price_values:
         livestock_risk_protection_new = LivestockRiskProtection(r, price)
         payoff = livestock_risk_protection_new.synthetic_option_payoff(P, K0, F0, T, sigma)
@@ -117,6 +108,7 @@ def plot_synthetic_option_payoff(r, P, K0, F0, T):
     min_payoff = min(total_payoffs)
     max_payoff = max(total_payoffs)
     normalized_payoffs = [(i-min_payoff)/(max_payoff-min_payoff) for i in total_payoffs]
+
     plt.figure(figsize=(10, 6))
     plt.plot(price_values_valid, normalized_payoffs, label='Synthetic Option Payoff')
     plt.title("Normalized Synthetic Option Payoff/Premium vs. K0")
@@ -128,15 +120,16 @@ def plot_synthetic_option_payoff(r, P, K0, F0, T):
 
 def plot_synthetic_option_delta(r, P, K0, F0, T):
     # Plot the synthetic option payoff
-    price_values = np.linspace(0, 2 * K0, 100)
+    price_values = np.linspace(0, 2 * K0, 1000)
     total_payoffs = []
     price_values_valid = []
 
-    livestock_risk_protection = LivestockRiskProtection(r, K0)  # Calculate ATM vol
+    livestock_risk_protection = LivestockRiskProtection(r, F0)  # Calculate ATM vol
     if T == 0:
         sigma = 0
     else:
         sigma = livestock_risk_protection.implied_volatility_with_futures(P, K0, T)
+
     for price in price_values:
         livestock_risk_protection_new = LivestockRiskProtection(r, price)
         payoff = livestock_risk_protection_new.synthetic_put_delta(P, K0, F0, T, sigma)
@@ -156,11 +149,8 @@ def plot_synthetic_option_delta(r, P, K0, F0, T):
     plt.legend()
     plt.show()
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     # T is faction_of_year
-    plot_synthetic_option_payoff(0.02, 10, 100, 90, 1/2)  # payoff is normalized [0,1)
-    plot_synthetic_option_delta(0.02, 10, 100, 90, 1/2)
+    plot_synthetic_option_payoff(0.1, 10, 100, 90, 0.0001) # payoff is normalized [0,1)
+    plot_synthetic_option_delta(0.1, 10, 100, 90, 0.0001)
 
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
